@@ -188,6 +188,8 @@ docker/nginx/ssl/*
 docker/middleware.env
 docker/docker-compose.override.yaml
 
+docker_deploy/*
+
 sdks/python-client/build
 sdks/python-client/dist
 sdks/python-client/dify_client.egg-info
