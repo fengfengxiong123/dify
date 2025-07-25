@@ -95,6 +95,8 @@ packages = []
 [tool.uv]
 default-groups = ["storage", "tools", "vdb"]
 package = false
+index-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+
 
 [dependency-groups]
 

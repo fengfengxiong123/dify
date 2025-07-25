@@ -35,7 +35,6 @@ else:
     from app_factory import create_app
 
     app = create_app()
-    print(app.config)
     celery = app.extensions["celery"]
 
 if __name__ == "__main__":
