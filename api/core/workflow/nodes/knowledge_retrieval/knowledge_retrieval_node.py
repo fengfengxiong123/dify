@@ -144,6 +144,8 @@ class KnowledgeRetrievalNode(LLMNode):
                 error=str(e),
                 error_type=type(e).__name__,
             )
+        finally:
+            db.session.close()
 
     def _fetch_dataset_retriever(self, node_data: KnowledgeRetrievalNodeData, query: str) -> list[dict[str, Any]]:
         available_datasets = []
@@ -170,6 +172,9 @@ class KnowledgeRetrievalNode(LLMNode):
             .filter((subquery.c.available_document_count > 0) | (Dataset.provider == "external"))
             .all()
         )
+
+        # avoid blocking at retrieval
+        db.session.close()
 
         for dataset in results:
             # pass if dataset is not available
@@ -490,6 +495,9 @@ class KnowledgeRetrievalNode(LLMNode):
     def _process_metadata_filter_func(
         self, sequence: int, condition: str, metadata_name: str, value: Optional[Any], filters: list
     ):
+        if value is None:
+            return
+
         key = f"{metadata_name}_{sequence}"
         key_value = f"{metadata_name}_{sequence}_value"
         match condition:

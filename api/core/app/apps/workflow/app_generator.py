@@ -23,8 +23,8 @@ from core.app.entities.app_invoke_entities import InvokeFrom, WorkflowAppGenerat
 from core.app.entities.task_entities import WorkflowAppBlockingResponse, WorkflowAppStreamResponse
 from core.model_runtime.errors.invoke import InvokeAuthorizationError
 from core.ops.ops_trace_manager import TraceQueueManager
-from core.repositories import SQLAlchemyWorkflowNodeExecutionRepository
-from core.repositories.sqlalchemy_workflow_execution_repository import SQLAlchemyWorkflowExecutionRepository
+from core.repositories import DifyCoreRepositoryFactory
+from core.workflow.repositories.draft_variable_repository import DraftVariableSaverFactory
 from core.workflow.repositories.workflow_execution_repository import WorkflowExecutionRepository
 from core.workflow.repositories.workflow_node_execution_repository import WorkflowNodeExecutionRepository
 from core.workflow.variable_loader import DUMMY_VARIABLE_LOADER, VariableLoader
@@ -155,14 +155,14 @@ class WorkflowAppGenerator(BaseAppGenerator):
             workflow_triggered_from = WorkflowRunTriggeredFrom.DEBUGGING
         else:
             workflow_triggered_from = WorkflowRunTriggeredFrom.APP_RUN
-        workflow_execution_repository = SQLAlchemyWorkflowExecutionRepository(
+        workflow_execution_repository = DifyCoreRepositoryFactory.create_workflow_execution_repository(
             session_factory=session_factory,
             user=user,
             app_id=application_generate_entity.app_config.app_id,
             triggered_from=workflow_triggered_from,
         )
         # Create workflow node execution repository
-        workflow_node_execution_repository = SQLAlchemyWorkflowNodeExecutionRepository(
+        workflow_node_execution_repository = DifyCoreRepositoryFactory.create_workflow_node_execution_repository(
             session_factory=session_factory,
             user=user,
             app_id=application_generate_entity.app_config.app_id,
@@ -219,6 +219,9 @@ class WorkflowAppGenerator(BaseAppGenerator):
         # new thread with request context and contextvars
         context = contextvars.copy_context()
 
+        # release database connection, because the following new thread operations may take a long time
+        db.session.close()
+
         worker_thread = threading.Thread(
             target=self._generate_worker,
             kwargs={
@@ -233,6 +236,10 @@ class WorkflowAppGenerator(BaseAppGenerator):
 
         worker_thread.start()
 
+        draft_var_saver_factory = self._get_draft_var_saver_factory(
+            invoke_from,
+        )
+
         # return response or stream generator
         response = self._handle_response(
             application_generate_entity=application_generate_entity,
@@ -241,6 +248,7 @@ class WorkflowAppGenerator(BaseAppGenerator):
             user=user,
             workflow_execution_repository=workflow_execution_repository,
             workflow_node_execution_repository=workflow_node_execution_repository,
+            draft_var_saver_factory=draft_var_saver_factory,
             stream=streaming,
         )
 
@@ -297,16 +305,14 @@ class WorkflowAppGenerator(BaseAppGenerator):
         # Create session factory
         session_factory = sessionmaker(bind=db.engine, expire_on_commit=False)
         # Create workflow execution(aka workflow run) repository
-        workflow_execution_repository = SQLAlchemyWorkflowExecutionRepository(
+        workflow_execution_repository = DifyCoreRepositoryFactory.create_workflow_execution_repository(
             session_factory=session_factory,
             user=user,
             app_id=application_generate_entity.app_config.app_id,
             triggered_from=WorkflowRunTriggeredFrom.DEBUGGING,
         )
         # Create workflow node execution repository
-        session_factory = sessionmaker(bind=db.engine, expire_on_commit=False)
-
-        workflow_node_execution_repository = SQLAlchemyWorkflowNodeExecutionRepository(
+        workflow_node_execution_repository = DifyCoreRepositoryFactory.create_workflow_node_execution_repository(
             session_factory=session_factory,
             user=user,
             app_id=application_generate_entity.app_config.app_id,
@@ -381,16 +387,14 @@ class WorkflowAppGenerator(BaseAppGenerator):
         # Create session factory
         session_factory = sessionmaker(bind=db.engine, expire_on_commit=False)
         # Create workflow execution(aka workflow run) repository
-        workflow_execution_repository = SQLAlchemyWorkflowExecutionRepository(
+        workflow_execution_repository = DifyCoreRepositoryFactory.create_workflow_execution_repository(
             session_factory=session_factory,
             user=user,
             app_id=application_generate_entity.app_config.app_id,
             triggered_from=WorkflowRunTriggeredFrom.DEBUGGING,
         )
         # Create workflow node execution repository
-        session_factory = sessionmaker(bind=db.engine, expire_on_commit=False)
-
-        workflow_node_execution_repository = SQLAlchemyWorkflowNodeExecutionRepository(
+        workflow_node_execution_repository = DifyCoreRepositoryFactory.create_workflow_node_execution_repository(
             session_factory=session_factory,
             user=user,
             app_id=application_generate_entity.app_config.app_id,
@@ -471,6 +475,7 @@ class WorkflowAppGenerator(BaseAppGenerator):
         user: Union[Account, EndUser],
         workflow_execution_repository: WorkflowExecutionRepository,
         workflow_node_execution_repository: WorkflowNodeExecutionRepository,
+        draft_var_saver_factory: DraftVariableSaverFactory,
         stream: bool = False,
     ) -> Union[WorkflowAppBlockingResponse, Generator[WorkflowAppStreamResponse, None, None]]:
         """
@@ -491,6 +496,7 @@ class WorkflowAppGenerator(BaseAppGenerator):
             user=user,
             workflow_execution_repository=workflow_execution_repository,
             workflow_node_execution_repository=workflow_node_execution_repository,
+            draft_var_saver_factory=draft_var_saver_factory,
             stream=stream,
         )
 

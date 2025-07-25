@@ -25,8 +25,10 @@ from core.app.entities.task_entities import ChatbotAppBlockingResponse, ChatbotA
 from core.model_runtime.errors.invoke import InvokeAuthorizationError
 from core.ops.ops_trace_manager import TraceQueueManager
 from core.prompt.utils.get_thread_messages_length import get_thread_messages_length
-from core.repositories import SQLAlchemyWorkflowNodeExecutionRepository
-from core.repositories.sqlalchemy_workflow_execution_repository import SQLAlchemyWorkflowExecutionRepository
+from core.repositories import DifyCoreRepositoryFactory
+from core.workflow.repositories.draft_variable_repository import (
+    DraftVariableSaverFactory,
+)
 from core.workflow.repositories.workflow_execution_repository import WorkflowExecutionRepository
 from core.workflow.repositories.workflow_node_execution_repository import WorkflowNodeExecutionRepository
 from core.workflow.variable_loader import DUMMY_VARIABLE_LOADER, VariableLoader
@@ -36,7 +38,10 @@ from libs.flask_utils import preserve_flask_contexts
 from models import Account, App, Conversation, EndUser, Message, Workflow, WorkflowNodeExecutionTriggeredFrom
 from models.enums import WorkflowRunTriggeredFrom
 from services.conversation_service import ConversationService
-from services.workflow_draft_variable_service import DraftVarLoader, WorkflowDraftVariableService
+from services.workflow_draft_variable_service import (
+    DraftVarLoader,
+    WorkflowDraftVariableService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -177,14 +182,14 @@ class AdvancedChatAppGenerator(MessageBasedAppGenerator):
             workflow_triggered_from = WorkflowRunTriggeredFrom.DEBUGGING
         else:
             workflow_triggered_from = WorkflowRunTriggeredFrom.APP_RUN
-        workflow_execution_repository = SQLAlchemyWorkflowExecutionRepository(
+        workflow_execution_repository = DifyCoreRepositoryFactory.create_workflow_execution_repository(
             session_factory=session_factory,
             user=user,
             app_id=application_generate_entity.app_config.app_id,
             triggered_from=workflow_triggered_from,
         )
         # Create workflow node execution repository
-        workflow_node_execution_repository = SQLAlchemyWorkflowNodeExecutionRepository(
+        workflow_node_execution_repository = DifyCoreRepositoryFactory.create_workflow_node_execution_repository(
             session_factory=session_factory,
             user=user,
             app_id=application_generate_entity.app_config.app_id,
@@ -254,14 +259,14 @@ class AdvancedChatAppGenerator(MessageBasedAppGenerator):
         # Create session factory
         session_factory = sessionmaker(bind=db.engine, expire_on_commit=False)
         # Create workflow execution(aka workflow run) repository
-        workflow_execution_repository = SQLAlchemyWorkflowExecutionRepository(
+        workflow_execution_repository = DifyCoreRepositoryFactory.create_workflow_execution_repository(
             session_factory=session_factory,
             user=user,
             app_id=application_generate_entity.app_config.app_id,
             triggered_from=WorkflowRunTriggeredFrom.DEBUGGING,
         )
         # Create workflow node execution repository
-        workflow_node_execution_repository = SQLAlchemyWorkflowNodeExecutionRepository(
+        workflow_node_execution_repository = DifyCoreRepositoryFactory.create_workflow_node_execution_repository(
             session_factory=session_factory,
             user=user,
             app_id=application_generate_entity.app_config.app_id,
@@ -337,14 +342,14 @@ class AdvancedChatAppGenerator(MessageBasedAppGenerator):
         # Create session factory
         session_factory = sessionmaker(bind=db.engine, expire_on_commit=False)
         # Create workflow execution(aka workflow run) repository
-        workflow_execution_repository = SQLAlchemyWorkflowExecutionRepository(
+        workflow_execution_repository = DifyCoreRepositoryFactory.create_workflow_execution_repository(
             session_factory=session_factory,
             user=user,
             app_id=application_generate_entity.app_config.app_id,
             triggered_from=WorkflowRunTriggeredFrom.DEBUGGING,
         )
         # Create workflow node execution repository
-        workflow_node_execution_repository = SQLAlchemyWorkflowNodeExecutionRepository(
+        workflow_node_execution_repository = DifyCoreRepositoryFactory.create_workflow_node_execution_repository(
             session_factory=session_factory,
             user=user,
             app_id=application_generate_entity.app_config.app_id,
@@ -450,6 +455,7 @@ class AdvancedChatAppGenerator(MessageBasedAppGenerator):
             workflow_execution_repository=workflow_execution_repository,
             workflow_node_execution_repository=workflow_node_execution_repository,
             stream=stream,
+            draft_var_saver_factory=self._get_draft_var_saver_factory(invoke_from),
         )
 
         return AdvancedChatAppGenerateResponseConverter.convert(response=response, invoke_from=invoke_from)
@@ -521,6 +527,7 @@ class AdvancedChatAppGenerator(MessageBasedAppGenerator):
         user: Union[Account, EndUser],
         workflow_execution_repository: WorkflowExecutionRepository,
         workflow_node_execution_repository: WorkflowNodeExecutionRepository,
+        draft_var_saver_factory: DraftVariableSaverFactory,
         stream: bool = False,
     ) -> Union[ChatbotAppBlockingResponse, Generator[ChatbotAppStreamResponse, None, None]]:
         """
@@ -547,6 +554,7 @@ class AdvancedChatAppGenerator(MessageBasedAppGenerator):
             workflow_execution_repository=workflow_execution_repository,
             workflow_node_execution_repository=workflow_node_execution_repository,
             stream=stream,
+            draft_var_saver_factory=draft_var_saver_factory,
         )
 
         try:
