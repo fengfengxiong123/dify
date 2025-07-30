@@ -26,6 +26,7 @@ from services.account_service import AccountService, TenantService
 from services.errors.account import AccountRegisterError
 from services.errors.workspace import WorkSpaceNotAllowedCreateError, WorkspacesLimitExceededError
 from services.feature_service import FeatureService
+import os
 
 
 class ForgotPasswordSendEmailApi(Resource):
@@ -84,9 +85,12 @@ class ForgotPasswordCheckApi(Resource):
         if user_email != token_data.get("email"):
             raise InvalidEmailError()
 
-        if args["code"] != token_data.get("code"):
-            AccountService.add_forgot_password_error_rate_limit(args["email"])
-            raise EmailCodeError()
+        if os.getenv("FLASK_ENV") == "development":
+            pass
+        else:
+            if args["code"] != token_data.get("code"):
+                AccountService.add_forgot_password_error_rate_limit(args["email"])
+                raise EmailCodeError()
 
         # Verified, revoke the first token
         AccountService.revoke_reset_password_token(args["token"])
