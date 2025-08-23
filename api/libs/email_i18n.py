@@ -260,7 +260,7 @@ class EmailI18nService:
         full_context = {
             **template_context,
             "branding_enabled": branding.enabled,
-            "application_title": branding.application_title if branding.enabled else "Dify",
+            "application_title": branding.application_title if branding.enabled else "Ai Chat",
         }
 
         # Render template
